@@ -1,6 +1,6 @@
 const std = @import("std");
 const c = @cImport({
-    @cInclude("SDL.h");
+    @cInclude("SDL3/SDL.h");
 });
 
 const log = std.debug.print;
@@ -100,65 +100,68 @@ pub fn main() !void {
     _ = c.SDL_Init(c.SDL_INIT_VIDEO);
     defer c.SDL_Quit();
 
-    const sdl_window = c.SDL_CreateWindow("Hello World", 100, 100, window_width, window_height, 0) orelse {
+    const sdl_window = c.SDL_CreateWindow("Hello World", window_width, window_height, 0) orelse {
         log("sdl create window failed {s}\n", .{c.SDL_GetError()});
         return error.SDLWindowCreationFailed;
     };
     defer c.SDL_DestroyWindow(sdl_window);
 
-    const sdl_renderer = c.SDL_CreateRenderer(sdl_window, -1, c.SDL_RENDERER_ACCELERATED) orelse {
+    const sdl_renderer = c.SDL_CreateRenderer(sdl_window, null) orelse {
         log("sdl create renderer failed {s}\n", .{c.SDL_GetError()});
         return error.SDLRendererCreationFailed;
     };
     defer c.SDL_DestroyRenderer(sdl_renderer);
 
     sdlClearBackground(sdl_renderer);
-    c.SDL_RenderPresent(sdl_renderer);
+    _ = c.SDL_RenderPresent(sdl_renderer) or {
+        log("sdl render present failed {s}\n", .{c.SDL_GetError()});
+        return error.SDLRenderPresentFailed;
+    };
 
     while (!quit) {
         sdlClearBackground(sdl_renderer);
         var event: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&event) != 0) {
+        while (c.SDL_PollEvent(&event)) {
             switch (event.type) {
-                c.SDL_QUIT => {
+                c.SDL_EVENT_QUIT => {
                     quit = true;
                 },
-                c.SDL_KEYDOWN => {
-                    const keydown_key = event.key.keysym.sym;
+                c.SDL_EVENT_KEY_DOWN => {
+                    const keydown_key = event.key.key;
                     switch (keydown_key) {
-                        c.SDLK_q => {
+                        c.SDLK_Q => {
                             log("bye bye\n", .{});
                             quit = true;
                         },
-                        c.SDLK_t => {
+                        c.SDLK_T => {
                             brush_size += 1;
                             log("bush+ to {d}\n", .{brush_size});
                         },
-                        c.SDLK_h => {
+                        c.SDLK_H => {
                             brush_size -= 1;
                             log("bush- to {d}\n", .{brush_size});
                         },
-                        c.SDLK_b => {
+                        c.SDLK_B => {
                             color = Color.Blue;
                             log("blue\n", .{});
                         },
-                        c.SDLK_g => {
+                        c.SDLK_G => {
                             color = Color.Green;
                             log("green\n", .{});
                         },
-                        c.SDLK_w => {
+                        c.SDLK_W => {
                             color = Color.White;
                             log("white\n", .{});
                         },
-                        c.SDLK_r => {
+                        c.SDLK_R => {
                             color = Color.Red;
                             log("red\n", .{});
                         },
-                        c.SDLK_y => {
+                        c.SDLK_Y => {
                             color = Color.Yellow;
                             log("yellow\n", .{});
                         },
-                        c.SDLK_x => {
+                        c.SDLK_X => {
                             color = Color.Black;
                             log("black\n", .{});
                         },
@@ -174,10 +177,10 @@ pub fn main() !void {
                     }
                 },
                 // mose button down
-                c.SDL_MOUSEBUTTONDOWN => {
+                c.SDL_EVENT_MOUSE_BUTTON_DOWN => {
                     should_draw = true;
                 },
-                c.SDL_MOUSEBUTTONUP => {
+                c.SDL_EVENT_MOUSE_BUTTON_UP => {
                     should_draw = false;
                 },
                 else => {},
@@ -185,13 +188,13 @@ pub fn main() !void {
         }
 
         // fetch mouse hover position
-        var mouse_x: i32 = undefined;
-        var mouse_y: i32 = undefined;
+        var mouse_x: f32 = undefined;
+        var mouse_y: f32 = undefined;
         if (should_draw) {
             _ = c.SDL_GetMouseState(&mouse_x, &mouse_y);
             // set the buffer value at the mouse position to 1
 
-            const location: i32 = clamp(i32, mouse_x + mouse_y * window_width, 0, @as(i32, @intCast(buffer.len)));
+            const location: i32 = clamp(i32, @as(i32, @intFromFloat(mouse_x)) + @as(i32, @intFromFloat(mouse_y)) * window_width, 0, @as(i32, @intCast(buffer.len)));
             const position: usize = @intCast(location);
             buffer[position] = colorToNumber(color);
         }
@@ -221,13 +224,13 @@ pub fn main() !void {
                 const pixel_color = numberToColor(pixel.*);
                 sdlSetDrawColor(pixel_color, sdl_renderer);
                 // fill rect
-                _ = c.SDL_RenderFillRect(sdl_renderer, &c.SDL_Rect{
-                    .x = @mod(x + rx, window_width),
-                    .y = @mod(y + rx, window_height),
+                _ = c.SDL_RenderFillRect(sdl_renderer, &c.SDL_FRect{
+                    .x = @floatFromInt(@mod(x + rx, window_width)),
+                    .y = @floatFromInt(@mod(y + rx, window_height)),
                     // .x = clamp(i32, x + rx, 0, window_width),
                     // .y = clamp(i32, y + rx, 0, window_height),
-                    .w = brush_size,
-                    .h = brush_size,
+                    .w = @floatFromInt(brush_size),
+                    .h = @floatFromInt(brush_size),
                 });
                 // }
                 // sleep for 100ms second
@@ -235,6 +238,9 @@ pub fn main() !void {
         }
 
         // std.time.sleep(std.time.ns_per_s / 10);
-        c.SDL_RenderPresent(sdl_renderer);
+    _ = c.SDL_RenderPresent(sdl_renderer) or {
+        log("sdl render present failed {s}\n", .{c.SDL_GetError()});
+        return error.SDLRenderPresentFailed;
+    };
     }
 }
